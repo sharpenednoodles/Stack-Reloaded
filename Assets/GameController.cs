@@ -87,6 +87,17 @@ public class GameController : MonoBehaviour
     }
 
     /// <summary>
+    /// Invokes the game as over
+    /// </summary>
+    void GameOver()
+    {
+        Debug.Log("<color=red>We missed the block</color>");
+        gameStart = false;
+        ToggleCanvas(gameUICanvas, gameOverCanvas);
+        prevBlock.AddComponent<Rigidbody>();
+    }
+
+    /// <summary>
     /// Place the block in the game world
     /// </summary>
     void PlaceBlock()
@@ -115,225 +126,118 @@ public class GameController : MonoBehaviour
                                                prevBlock.transform.position.z + (prevBlock.transform.localScale.z / 2));
 
 
-        Debug.Log("<color=yellow>INFO-X</color> base: "+baseBlockXBounds);
-        Debug.Log("<color=yellow>INFO-X</color> prev: " + prevBlockXBounds);
-        
+        //Debug.Log("<color=yellow>INFO-X</color> base: "+baseBlockXBounds);
+        //Debug.Log("<color=yellow>INFO-X</color> prev: " + prevBlockXBounds);
 
-        //Determine whether our ranges overlap
-        //Need to check this based upon X and Z coordinates!!!
-        if (!(baseBlockXBounds.x < prevBlockXBounds.y && prevBlockXBounds.x < baseBlockXBounds.y))
-        {
-            Debug.Log("<color=red>We missed the block on X!</color>");
-            gameStart = false;
-            ToggleCanvas(gameUICanvas, gameOverCanvas);
-            prevBlock.AddComponent<Rigidbody>();
-            return;
-        }
-        else
-        {
-            //Create new wedge
-            CreateBlock(prevBlock.transform.position.y + 2);
-        }
+        float overlap, split;
 
-     
-        
-        //Create split wedge block
-        GameObject splitBlock = Instantiate(blockPrefab, new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0));
-        splitBlock.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.HSVToRGB((score + colorOffset) / 100f % 1f, 1f, 1f));
-        
-
+        //TODO rewrite to be generalised. Allow code to be reused for both cases
         if (invertMove)
         {
-            ///TEMP FIX FOR DEBUGGIN X MOVEMENT ONLY
-            invertMove = false;
+            //Keep on X bounds only for debugging
+            //invertMove = false;
+            overlap = Mathf.Min(baseBlockXBounds.y, prevBlockXBounds.y) - Mathf.Max(baseBlockXBounds.x, prevBlockXBounds.x);
+            Debug.Log("Overlap interval =" + overlap);
 
-            //Modify x fields
-            float overlapX = 0;
-
-            //Calculate split coordinate, as the prev coordinate that isn't in the range of base
-            float splitX = 0;
-            if (prevBlockXBounds.x > baseBlockXBounds.x && prevBlockXBounds.x < baseBlockXBounds.y)
+            //We missed the block, invoke gameover
+            if (overlap < 0)
             {
-                splitX = baseBlockXBounds.y;
+                GameOver();
+                return;
+            }
+
+            
+            //Calculate the split point
+            if (baseBlockXBounds.x < prevBlockXBounds.x)
+            {
+                split = baseBlockXBounds.y;
+                float blockPos, splitPos;
+                blockPos = split - 0.5f * overlap;
+                prevBlock.transform.localScale = new Vector3(overlap, prevBlock.transform.localScale.y, prevBlock.transform.localScale.z);
+                prevBlock.transform.position = new Vector3(blockPos, prevBlock.transform.position.y, prevBlock.transform.position.z);
+
+                //This SHOULD be positive only!!
+                float splitScale = baseScale.x - overlap;
+                splitPos = split + 0.5f * splitScale;
+                CreateSplit(new Vector3(splitPos, prevBlock.transform.position.y, prevBlock.transform.position.z), new Vector3(splitScale, prevBlock.transform.localScale.y, prevBlock.transform.localScale.z));
+                
+            }
+            else if (baseBlockXBounds.x > prevBlockXBounds.x)
+            {
+                split = baseBlockXBounds.x;
+                float blockPos, splitPos;
+                blockPos = split + 0.5f * overlap;
+                prevBlock.transform.localScale = new Vector3(overlap, prevBlock.transform.localScale.y, prevBlock.transform.localScale.z);
+                prevBlock.transform.position = new Vector3(blockPos, prevBlock.transform.position.y, prevBlock.transform.position.z);
+
+                //This SHOULD be positive only!!
+                float splitScale = baseScale.x - overlap;
+                splitPos = split - 0.5f * splitScale;
+                CreateSplit(new Vector3(splitPos, prevBlock.transform.position.y, prevBlock.transform.position.z), new Vector3(splitScale, prevBlock.transform.localScale.y, prevBlock.transform.localScale.z));
             }
             else
             {
-                splitX = baseBlockXBounds.x;
-            }
-
-            float overLapXNeg = Mathf.Min(baseBlockXBounds.y, baseBlockXBounds.x) - Mathf.Max(prevBlockXBounds.x, prevBlockXBounds.y);
-            float overLapXPos = Mathf.Max(baseBlockXBounds.y, baseBlockXBounds.x) - Mathf.Min(prevBlockXBounds.x, prevBlockXBounds.y);
-
-            //Calculate overlap based upon positive, or negative boundaries
-            if (prevBlock.transform.position.x < 0)
-            {
-                overlapX = Mathf.Min(baseBlockXBounds.y, baseBlockXBounds.x) - Mathf.Max(prevBlockXBounds.x, prevBlockXBounds.y);
-                Debug.Log("<color=orange>-ve boundry</color>");
-            }
-            else
-            {
-                overlapX = Mathf.Max(baseBlockXBounds.y, baseBlockXBounds.x) - Mathf.Min(prevBlockXBounds.x, prevBlockXBounds.y);
-                Debug.Log("<color=orange>+ve boundry</color>");
-            }
-            
-            if (overlapX > baseScale.x)
-            {
-                Debug.Log("CORRECTION CALL");
-                overlapX = Mathf.Min(overLapXNeg, overLapXPos);
-            }
-
-            Debug.Log("<color=green>OverlapX</color>: " + overlapX + " <color=green>Min:</color>" + Mathf.Min(baseBlockXBounds.y, baseBlockXBounds.x) + " <color=green>Max:</color>" + Mathf.Max(prevBlockXBounds.x, prevBlockXBounds.y));
-            //change scale of previous block in x
-            prevBlock.transform.localScale = new Vector3(Mathf.Abs(overlapX), 
-                                                         prevBlock.transform.localScale.y, 
-                                                         prevBlock.transform.localScale.z);
-
-            
-            //Set scale of split block
-            if (baseScale.x - Mathf.Abs(overlapX) < 0)
-            {
-                Debug.LogError("Negative boudary for block split");
-            }
-            splitBlock.transform.localScale = new Vector3(baseScale.x - Mathf.Abs(overlapX),
-                                                                   prevBlock.transform.localScale.y,
-                                                                   prevBlock.transform.localScale.z);
-            //Set position of wedge
-            splitBlock.transform.position = new Vector3(splitBlock.transform.localScale.x/2 + splitX,
-                                                        prevBlock.transform.position.y,
-                                                        prevBlock.transform.position.z);
-
-            splitBlock.AddComponent<Rigidbody>();
-            
-
-            float bigCord = splitX + (prevBlock.transform.localScale.x / 2);
-            float smallCord = splitX - (prevBlock.transform.localScale.x / 2);
-
-            if (bigCord > baseBlockXBounds.x && bigCord < baseBlockXBounds.y)
-            {
-                //Modify x pos of prev
-                prevBlock.transform.position = new Vector3(bigCord,
-                                                       prevBlock.transform.position.y,
-                                                       prevBlock.transform.position.z);
-
-                Debug.Log("Splitting block bounds at " + splitX + " with positive, \nmoving prev to " + bigCord +" small cord:" +smallCord);
-            }
-            else
-            {
-                //Modify x pos of prev
-                prevBlock.transform.position = new Vector3(smallCord,
-                                                       prevBlock.transform.position.y,
-                                                       prevBlock.transform.position.z);
-
-                Debug.Log("Splitting block bounds at " + splitX + " with negative, \nmoving prev to " +smallCord + " big cord:" +bigCord );
-            }
-
-            //Modify x pos of new block to patch prev
-            currentBlock.transform.position = new Vector3(prevBlock.transform.position.x, 
-                                                          currentBlock.transform.position.y, 
-                                                          currentBlock.transform.position.z);
-            //Catching errors
-            //THESE FIELDS ARE THE SAME VALUE FOR SOME REASON
-            Debug.LogWarning("Prev Scale =" + prevBlock.transform.localScale.x + " Base Scale =" + baseScale.x);
-            if (prevBlock.transform.localScale.x > baseScale.x)
-            {
-                Debug.LogError("<color=red>Block has grown in size!</color>");
+                Debug.Log("No split!");
             }
         }
-        else
+        else if (!invertMove)
         {
-            //Modify x fields
-            float overlapZ = 0;
+            overlap = Mathf.Min(baseBlockZBounds.y, prevBlockZBounds.y) - Mathf.Max(baseBlockZBounds.x, prevBlockZBounds.x);
+            Debug.Log("Block overlap =" + overlap);
 
-            //Calculate split coordinate, as the prev coordinate that isn't in the range of base
-            float splitZ = 0;
-            if (prevBlockZBounds.x > baseBlockZBounds.x && prevBlockZBounds.x < baseBlockZBounds.y)
+            //We missed the block, invoke gameover
+            if (overlap < 0)
             {
-                splitZ = baseBlockZBounds.y;
+                GameOver();
+                return;
+            }
+
+          
+            //Calculate the split point
+            if (baseBlockZBounds.x < prevBlockZBounds.x)
+            {
+                split = baseBlockZBounds.y;
+                float blockPos, splitPos;
+                blockPos = split - 0.5f * overlap;
+                prevBlock.transform.localScale = new Vector3(prevBlock.transform.localScale.x, prevBlock.transform.localScale.y, overlap);
+                prevBlock.transform.position = new Vector3(prevBlock.transform.position.x, prevBlock.transform.position.y, blockPos);
+
+                //This SHOULD be positive only!!
+                float splitScale = baseScale.z - overlap;
+                splitPos = split + 0.5f * splitScale;
+                CreateSplit(new Vector3(prevBlock.transform.position.x, prevBlock.transform.position.y, splitPos), new Vector3(prevBlock.transform.localScale.x, prevBlock.transform.localScale.y, splitScale));
+
+            }
+            else if (baseBlockZBounds.x > prevBlockZBounds.x)
+            {
+                split = baseBlockZBounds.x;
+                float blockPos, splitPos;
+                blockPos = split + 0.5f * overlap;
+                prevBlock.transform.localScale = new Vector3(prevBlock.transform.localScale.x, prevBlock.transform.localScale.y, overlap);
+                prevBlock.transform.position = new Vector3(prevBlock.transform.position.x, prevBlock.transform.position.y, blockPos);
+
+   
+                float splitScale = baseScale.z - overlap;
+                splitPos = split - 0.5f * splitScale;
+                CreateSplit(new Vector3(prevBlock.transform.position.x, prevBlock.transform.position.y, splitPos), new Vector3(prevBlock.transform.localScale.x, prevBlock.transform.localScale.y, splitScale));
             }
             else
             {
-                splitZ = baseBlockZBounds.x;
+                Debug.Log("No split!");
             }
-
-            float overLapZNeg = Mathf.Min(baseBlockZBounds.y, baseBlockZBounds.x) - Mathf.Max(prevBlockZBounds.x, prevBlockZBounds.y);
-            float overLapZPos = Mathf.Max(baseBlockZBounds.y, baseBlockZBounds.x) - Mathf.Min(prevBlockZBounds.x, prevBlockZBounds.y);
-
-            //Calculate overlap based upon positive, or negative boundaries
-            if (prevBlock.transform.position.z < 0)
-            {
-                overlapZ = Mathf.Min(baseBlockZBounds.y, baseBlockZBounds.x) - Mathf.Max(prevBlockZBounds.x, prevBlockZBounds.y);
-                Debug.Log("<color=orange>-ve boundry</color>");
-            }
-            else
-            {
-                overlapZ = Mathf.Max(baseBlockZBounds.y, baseBlockZBounds.x) - Mathf.Min(prevBlockZBounds.x, prevBlockZBounds.y);
-                Debug.Log("<color=orange>+ve boundry</color>");
-            }
-
-            if (overlapZ > baseScale.x)
-            {
-                Debug.Log("CORRECTION CALL");
-                overlapZ = Mathf.Min(overLapZNeg, overLapZPos);
-            }
-
-            Debug.Log("<color=green>OverlapX</color>: " + overlapZ + " <color=green>Min:</color>" + Mathf.Min(baseBlockZBounds.y, baseBlockZBounds.x) + " <color=green>Max:</color>" + Mathf.Max(prevBlockZBounds.x, prevBlockZBounds.y));
-            //change scale of previous block in x
-            prevBlock.transform.localScale = new Vector3(prevBlock.transform.localScale.x,
-                                                         prevBlock.transform.localScale.y,
-                                                         Mathf.Abs(overlapZ));
-
-
-            //Set scale of split block
-            splitBlock.transform.localScale = new Vector3(prevBlock.transform.localScale.x,
-                                                          prevBlock.transform.localScale.y,
-                                                          baseScale.z - Mathf.Abs(overlapZ));
-            //Set position of wedge
-            splitBlock.transform.position = new Vector3(prevBlock.transform.position.x,
-                                                        prevBlock.transform.position.y,
-                                                        splitBlock.transform.localScale.z / 2 + splitZ);
-
-            splitBlock.AddComponent<Rigidbody>();
-
-
-            float bigCord = splitZ + (prevBlock.transform.localScale.z / 2);
-            float smallCord = splitZ - (prevBlock.transform.localScale.z / 2);
-
-            if (bigCord > baseBlockZBounds.x && bigCord < baseBlockZBounds.y)
-            {
-                //Modify x pos of prev
-                prevBlock.transform.position = new Vector3(prevBlock.transform.position.x,
-                                                           prevBlock.transform.position.y,
-                                                           bigCord);
-
-                Debug.Log("Splitting block bounds at " + splitZ + " with positive, \nmoving prev to " + bigCord + " small cord:" + smallCord);
-            }
-            else
-            {
-                //Modify x pos of prev
-                prevBlock.transform.position = new Vector3(prevBlock.transform.position.x,
-                                                           prevBlock.transform.position.y,
-                                                           smallCord);
-
-                Debug.Log("Splitting block bounds at " + splitZ + " with negative, \nmoving prev to " + smallCord + " big cord:" + bigCord);
-            }
-
-            //Modify x pos of new block to patch prev
-            currentBlock.transform.position = new Vector3(currentBlock.transform.position.x,
-                                                          currentBlock.transform.position.y,
-                                                          prevBlock.transform.position.z);
         }
 
-        //Set new block scale
-        currentBlock.transform.localScale = new Vector3(prevBlock.transform.localScale.x, prevBlock.transform.localScale.y, prevBlock.transform.localScale.z);
+        //Set new block scale to prevblock
+        CreateBlock(prevBlock.transform.position.y + 2);
+        currentBlock.transform.localScale = prevBlock.transform.localScale;
+        currentBlock.transform.position = new Vector3(prevBlock.transform.position.x, currentBlock.transform.position.y, prevBlock.transform.position.z);
 
         //Move camera
         cameraHeightTarget += 2;
-        //Update score
 
-        //Check if game is still running
+        //Update score
         score += 1;
         scoreDisplay.text = score.ToString();
-
     }
 
     void CreateBlock(float spawnHeight)
@@ -341,6 +245,16 @@ public class GameController : MonoBehaviour
         currentBlock = Instantiate(blockPrefab, new Vector3(0, spawnHeight, 0), new Quaternion(0, 0, 0, 0));
         currentBlock.name = "Block Level " + score;
         currentBlock.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.HSVToRGB((score + colorOffset) / 100f % 1f, 1f, 1f));
+    }
+
+    void CreateSplit(Vector3 SpawnPos, Vector3 Scale)
+    {
+        GameObject splitblock = Instantiate(blockPrefab, new Vector3(0,0,0), new Quaternion(0, 0, 0, 0));
+        splitblock.name = "Block split " + score;
+        splitblock.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.HSVToRGB((score + colorOffset) / 100f % 1f, 1f, 1f));
+        splitblock.transform.localScale = Scale;
+        splitblock.transform.position = SpawnPos;
+        splitblock.AddComponent<Rigidbody>();
     }
 
 
